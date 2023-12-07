@@ -4,8 +4,12 @@
     <title>Motion Extraction Tool</title>
 </head>
 <body>
+    <labe for="fileInput">Video File:</labe>
     <input type="file" id="fileInput" accept="video/*">
+    <label for="frameDelaySlider">Frame Delay:</label>
     <input type="range" id="frameDelaySlider" min="0" max="59" value="0">
+    <label for="blurSlider">Blur Intensity:</label>
+    <input type="range" id="blurSlider" min="0" max="20" value="0">
     <div style="position:relative; max-width: 640px;">
         <video id="video" controls style="width: 100%; height: auto;"></video>
         <canvas id="canvas" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
@@ -53,11 +57,19 @@
             canvas.height = rect.height;
         }
 
+        const blurSlider = document.getElementById('blurSlider');
+
+        blurSlider.addEventListener('input', function() {
+            // Update the canvas drawing to apply the blur
+            drawVideoFrame();
+        });
+
         function drawVideoFrame() {
             if (video.paused || video.ended) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
 
+            ctx.filter = 'blur(' + blurSlider.value + 'px)'; // Apply blur based on slider value
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             frameBuffer.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
             if (frameBuffer.length > maxBufferLength) {
@@ -70,6 +82,8 @@
                 ctx.putImageData(frameBuffer[frameBuffer.length - 1 - delay], 0, 0);
                 invertColors(ctx);
             }
+
+            ctx.filter = 'none'; // Reset filter for next frame
 
             requestAnimationFrame(drawVideoFrame);
         }
