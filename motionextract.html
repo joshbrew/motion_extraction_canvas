@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Motion Extraction Tool</title>
+</head>
+<body>
+    <input type="file" id="fileInput" accept="video/*">
+    <input type="range" id="frameDelaySlider" min="0" max="59" value="0">
+    <div style="position:relative; max-width: 640px;">
+        <video id="video" controls style="width: 100%; height: auto;"></video>
+        <canvas id="canvas" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
+    </div>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', {willReadFrequently:true});
+        const frameDelaySlider = document.getElementById('frameDelaySlider');
+        let frameBuffer = [];
+        const maxBufferLength = 60; // Adjust as needed
+
+        const fileInput = document.getElementById('fileInput');
+        
+        fileInput.addEventListener('change', function(event) {
+            if (event.target.files && event.target.files[0]) {
+                const file = event.target.files[0];
+                const url = URL.createObjectURL(file);
+                video.src = url;
+                video.load();  // Load the new video
+                updateCanvasSize();  // Update canvas size for the new video
+                frameBuffer.length = 0;
+            }
+        });
+
+        video.src = "https://v3.cdnpk.net/videvo_files/video/free/2015-09/large_watermarked/Leaf_1_preview.mp4";
+        video.muted = true;
+        video.loop = true;
+        video.crossOrigin = "anonymous";
+
+        video.addEventListener('loadedmetadata', () => {
+            updateCanvasSize();
+            video.play();
+        });
+
+        window.addEventListener('resize', updateCanvasSize);
+
+        video.addEventListener('play', function() {
+            drawVideoFrame();
+        });
+
+        function updateCanvasSize() {
+            const rect = video.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+
+        function drawVideoFrame() {
+            if (video.paused || video.ended) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frameBuffer.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+            if (frameBuffer.length > maxBufferLength) {
+                frameBuffer.shift();
+            }
+
+            const delay = parseInt(frameDelaySlider.value);
+            if (frameBuffer.length > delay) {
+                ctx.globalAlpha = 0.5;
+                ctx.putImageData(frameBuffer[frameBuffer.length - 1 - delay], 0, 0);
+                invertColors(ctx);
+            }
+
+            requestAnimationFrame(drawVideoFrame);
+        }
+
+        function invertColors(ctx) {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = 255 - data[i];
+                data[i + 1] = 255 - data[i + 1];
+                data[i + 2] = 255 - data[i + 2];
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+    </script>
+</body>
+</html>
