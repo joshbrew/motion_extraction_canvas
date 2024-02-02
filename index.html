@@ -4,7 +4,7 @@
     <title>Motion Extraction Tool</title>
 </head>
 <body>
-    <labe for="fileInput">Video File:</labe>
+    <label for="fileInput">Video File:</label>
     <input type="file" id="fileInput" accept="video/*">
     <label for="frameDelaySlider">Frame Delay:</label>
     <input type="range" id="frameDelaySlider" min="0" max="59" value="0">
@@ -31,6 +31,8 @@
                 video.src = url;
                 video.load();  // Load the new video
                 updateCanvasSize();  // Update canvas size for the new video
+
+                frameBuffer.map((v) => v.close());
                 frameBuffer.length = 0;
             }
         });
@@ -47,59 +49,83 @@
 
         window.addEventListener('resize', updateCanvasSize);
 
-        video.addEventListener('play', function() {
-            drawVideoFrame();
-        });
+
+        video.addEventListener('play', function(ev) {});
+
+        video.requestVideoFrameCallback(drawVideoFrame);
+
+        // Assume offScreenCanvas is another canvas element created for processing frames.
+        // It should have the same dimensions as your main canvas.
+        const offScreenCanvas = document.createElement('canvas');
+        const offCtx = offScreenCanvas.getContext('2d');
 
         function updateCanvasSize() {
             const rect = video.getBoundingClientRect();
             canvas.width = rect.width;
             canvas.height = rect.height;
+            offScreenCanvas.width = canvas.width;
+            offScreenCanvas.height = canvas.height;
         }
 
         const blurSlider = document.getElementById('blurSlider');
 
-        blurSlider.addEventListener('input', function() {
-            // Update the canvas drawing to apply the blur
-            drawVideoFrame();
-        });
 
         function drawVideoFrame() {
+            video.requestVideoFrameCallback(drawVideoFrame);
             if (video.paused || video.ended) return;
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the main canvas
 
-            ctx.filter = 'blur(' + blurSlider.value + 'px)'; // Apply blur based on slider value
+            // Draw the current video frame onto the main canvas.
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Store the current frame in the buffer.
             frameBuffer.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
             if (frameBuffer.length > maxBufferLength) {
-                frameBuffer.shift();
+                frameBuffer.shift(); // Remove the oldest frame if we exceed the max buffer size.
             }
 
             const delay = parseInt(frameDelaySlider.value);
             if (frameBuffer.length > delay) {
+                // Clear the off-screen canvas
+                offCtx.clearRect(0, 0, offScreenCanvas.width, offScreenCanvas.height);
+
+                const delayedFrameIndex = frameBuffer.length - 1 - delay;
+                const delayedFrame = frameBuffer[delayedFrameIndex];
+
+                // Draw the delayed frame onto the off-screen canvas.
+                offCtx.putImageData(delayedFrame, 0, 0);
+
+                // Apply filters to the off-screen canvas.
+                ctx.filter = 'invert(1) blur(' + blurSlider.value + 'px)';
+
+                // Temporarily reduce global alpha on the main canvas to blend the inverted frame with half opacity.
                 ctx.globalAlpha = 0.5;
-                ctx.putImageData(frameBuffer[frameBuffer.length - 1 - delay], 0, 0);
-                invertColors(ctx);
+
+                // Draw the processed frame from the off-screen canvas onto the main canvas.
+                ctx.drawImage(offScreenCanvas, 0, 0, canvas.width, canvas.height);
+
+                // Reset globalAlpha and filter for the next frame.
+                ctx.globalAlpha = 1.0;
+                ctx.filter = 'none';
+
+                // Clear the filter from the off-screen canvas to avoid affecting future frames.
+                offCtx.filter = 'none';
             }
-
-            ctx.filter = 'none'; // Reset filter for next frame
-
-            requestAnimationFrame(drawVideoFrame);
         }
 
-        function invertColors(ctx) {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-
-            for (let i = 0; i < data.length; i += 4) {
-                data[i] = 255 - data[i];
-                data[i + 1] = 255 - data[i + 1];
-                data[i + 2] = 255 - data[i + 2];
-            }
-
-            ctx.putImageData(imageData, 0, 0);
-        }
+        // function invertColors(imageData, width, height) {
+        //     const data = imageData.data;
+        //     for (let i = 0; i < data.length; i += 4) {
+        //         // Invert color components.
+        //         data[i] = 255 - data[i];     // Red
+        //         data[i + 1] = 255 - data[i + 1]; // Green
+        //         data[i + 2] = 255 - data[i + 2]; // Blue
+        //         // Alpha remains unchanged.
+        //     }
+        //     return new ImageData(data, width, height);
+        // }
+       
     </script>
 </body>
 </html>
